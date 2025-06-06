@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools >= 68.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "queensgym"
+description = "A simple API to train RL models in n-queens and other related problems."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT License" }
+keywords = ["Reinforcement Learning", "RL", "n-Queens", "queens"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10"
+]
+dependencies = [
+    "numpy",
+    "pygame>=2.1.0",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pre-commit",
+    "pytest-cov",
+    "tox",
+    "reorder-python-imports",
+    "mypy"
+]
+
+[project.urls]
+repository = "https://github.com/aciriano/QueensGym"
+
+[tool.setuptools.dynamic]
+version = {attr = "queensgym.__version__"}
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["queensgym", "queensgym.*"]
+
+[tool.setuptools.package-data]
+queensgym = [
+    "display/icons/*.png"
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: unitary tests to verify local functionalities.",
+    "end2end: tests that represent interactions and complete experiments.",
+    "example: tests that reproduce use cases.",
+    "slow: tests that require more time to be executed."
+]
+testpaths = "tests"
+addopts = "-m 'not slow' --cov=queensgym --cov-report=html --disable-warnings -vv"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
