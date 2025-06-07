@@ -1,10 +1,8 @@
 import abc
 from pathlib import Path
-from typing import ClassVar
+from typing import Any
 from typing import Type
 from typing import TYPE_CHECKING
-
-from typing_extensions import Self
 
 from queensgym.exceptions import PieceDefinitionError
 
@@ -12,107 +10,277 @@ if TYPE_CHECKING:
     from queensgym.core.board import Square
 
 
+__all__ = (
+    "ChessPiece",
+    "ChessPieceRegistry",
+    "register_piece",
+    "Queen",
+    "Rook",
+    "Bishop",
+    "Knight",
+    "King",
+)
+
+
 ICONS_FOLDER = Path(__file__).parent.parent / "icons"
 
 
-class ChessPiece(abc.ABC):
-    # Class variables shared by all subclasses. Icon can be
-    # replaced by each piece if needed.
-    registry: dict[int, Type[Self]] = dict()
-    icon: ClassVar[Path | None] = None
+def register_piece(cls: Type["ChessPiece"]) -> Any:
+    """
+    Decorator to register a chess piece class in the ChessPieceRegistry.
+    See `Queen` class for an example of usage.
 
-    # Class variables that must be set by subclasses as they
-    # defined the static properties of the piece.
-    id: ClassVar[int]
-    symbol: ClassVar[str]
-    value: ClassVar[float]
+    Args:
+        cls (Type[ChessPiece]): The chess piece class to register.
+    """
+    return ChessPieceRegistry.add(cls)
+
+
+class ChessPieceRegistry:
+    """
+    A static class to hold the registry of chess pieces.
+
+    This class cannot be instantiated and is used to register chess pieces
+    that inherit from the `ChessPiece` class. It provides methods to add
+    pieces to the registry and check if a piece with a given ID exists.
+    This class is designed to be a singleton, ensuring that only one instance
+    of the registry exists throughout the application.
+    """
+
+    __registry: dict[int, Type["ChessPiece"]] = dict()
+
+    @classmethod
+    def add(cls, piece: Type["ChessPiece"]) -> None:
+        """
+        Add a chess piece to the registry.
+
+        Args:
+            piece (Type[ChessPiece]): The chess piece class to add.
+
+        Raises:
+            PieceDefinitionError: If the piece ID is already in use.
+        """
+        if not issubclass(piece, ChessPiece):
+            raise PieceDefinitionError(
+                f"Only subclasses of ChessPiece can be registered. "
+                f"{piece.__name__} is not a subclass of ChessPiece."
+            )
+        elif piece.get_id() in cls.__registry:
+            raise PieceDefinitionError(
+                f"Id {piece.get_id()} is currently used by "
+                f"piece {cls.__registry[piece.get_id()].__name__}."
+            )
+        cls.__registry[piece.get_id()] = piece
+
+    @classmethod
+    def exists(cls, piece: Type["ChessPiece"]) -> bool:
+        """
+        Check if a chess piece is registered in the registry.
+
+        Args:
+            piece (Type[ChessPiece]): The chess piece class to check.
+
+        Returns:
+            bool: True if the piece is registered, False otherwise.
+        """
+        return piece in cls.__registry.values()
+
+
+class ChessPiece(abc.ABC):
+    """
+    Abstract base class for chess pieces.
+
+    This class defines the interface that all chess pieces must implement.
+    It includes methods to get the piece's ID, symbol, value, icon, and
+    to check if the piece can attack a target square.
+
+    All chess pieces are static classes and must define the following class methods:
+        - `get_id`: Returns the unique identifier for the chess piece.
+        - `get_symbol`: Returns the symbol representing the chess piece.
+        - `get_value`: Returns the value of the chess piece.
+        - `get_icon`: Returns the icon path for the chess piece.
+        - `attack`: Checks if the piece can attack a target square from a source square.
+    """
+
+    @classmethod
+    @abc.abstractmethod
+    def get_id(cls: Type["ChessPiece"]) -> int:
+        """
+        Get the unique identifier for the chess piece.
+
+        Returns:
+            int: The unique ID of the chess piece.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def get_symbol(cls: Type["ChessPiece"]) -> str:
+        """
+        Get the symbol representing the chess piece.
+
+        Returns:
+            str: The symbol of the chess piece.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def get_value(cls: Type["ChessPiece"]) -> float:
+        """
+        Get the value of the chess piece.
+
+        Returns:
+            float: The value of the chess piece.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def get_icon(cls: Type["ChessPiece"]) -> Path | None:
+        """
+        Get the icon path for the chess piece.
+
+        Returns:
+            Path | None: The path to the icon file, or None if not defined.
+        """
+        raise NotImplementedError
 
     @classmethod
     @abc.abstractmethod
     def attack(cls, _from: "Square", _to: "Square") -> bool:
+        """
+        Check if the piece can attack the target square from the source square.
+
+        Args:
+            _from (Square): The square from which the piece is moving.
+            _to (Square): The target square to which the piece is moving.
+
+        Returns:
+            bool: True if the piece can attack the target square, False otherwise.
+        """
         raise NotImplementedError
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls: Type["ChessPiece"], **kwargs: Any) -> None:
+        """
+        Checks if the subclass has the required class variables defined and if they are valid.
+
+        Args:
+            cls (Type[ChessPiece]): The subclass being defined.
+            **kwargs: Additional keyword arguments.
+
+        Raises:
+            PieceDefinitionError: If the subclass does not define the required
+                class variables or if they are invalid.
+        """
         super().__init_subclass__(**kwargs)
-        if (not hasattr(cls, "id")) or not isinstance(cls.id, int):
+        if (not isinstance(cls.get_id(), int)) or cls.get_id() <= 0:
             raise PieceDefinitionError(
-                f"Every ChessPiece must defined its id as an integer ({cls.__name__})."
+                f"Every ChessPiece must defined its id as a positive "
+                f"integer ({cls.__name__}). Value {cls.get_id()} is invalid."
             )
-        elif (not hasattr(cls, "value")) or not isinstance(cls.value, float):
+        elif (not isinstance(cls.get_value(), float)) or cls.get_value() <= 0:
             raise PieceDefinitionError(
-                f"Every ChessPiece must defined its value as a float ({cls.__name__})."
+                f"Every ChessPiece must defined its value as a "
+                f"positive float ({cls.__name__}). Value {cls.get_value()} is invalid."
             )
-        elif (not hasattr(cls, "symbol")) or not isinstance(cls.symbol, str):
+        elif (not isinstance(cls.get_symbol(), str)) or len(cls.get_symbol()) != 1:
             raise PieceDefinitionError(
-                f"Every ChessPiece must defined its symbol as a string ({cls.__name__})."
+                f"Every ChessPiece must defined its symbol as a single-character "
+                f"string ({cls.__name__}). Value {cls.get_symbol()} is invalid."
             )
-        elif cls.id in ChessPiece.registry:
+        elif not isinstance(cls.get_icon(), (Path, type(None))):
             raise PieceDefinitionError(
-                f"Id {cls.id} is currently used by "
-                f"piece {ChessPiece.registry[cls.id].__name__}."
+                f"Every ChessPiece must defined its icon as a Path or None "
+                f"({cls.__name__}). Value {cls.get_icon()} is invalid."
             )
-        elif cls.value <= 0:
-            raise PieceDefinitionError(
-                f"ChessPiece value must be a positive float. "
-                f"Value {cls.value} of piece {cls.__name__} is invalid."
-            )
-        elif len(cls.symbol) != 1:
-            raise PieceDefinitionError(
-                f"ChessPiece symbol must be a single-character string. "
-                f"Value {cls.symbol} of piece {cls.__name__} is invalid."
-            )
-        else:
-            ChessPiece.registry[cls.id] = cls
 
 
+@register_piece
 class Queen(ChessPiece):
     """
     In chess, queens can move an arbitrary number of squares in diagonally,
     horizontally or vertically. Its value is 9.
     """
 
-    id = 1
-    symbol = "♕"
-    value = 9.0
-    icon = ICONS_FOLDER / "queen.png"
+    @classmethod
+    def get_id(cls: Type["ChessPiece"]) -> int:
+        return 1
 
     @classmethod
-    def attack(cls, _from, _to) -> bool:
+    def get_symbol(cls: Type["ChessPiece"]) -> str:
+        return "♕"
+
+    @classmethod
+    def get_value(cls: Type["ChessPiece"]) -> float:
+        return 9.0
+
+    @classmethod
+    def get_icon(cls: Type["ChessPiece"]) -> Path | None:
+        return ICONS_FOLDER / "queen.png"
+
+    @classmethod
+    def attack(cls, _from: "Square", _to: "Square") -> bool:
         return _from.in_same_diagonal(_to) or _from.in_same_file(_to) or _from.in_same_rank(_to)
 
 
+@register_piece
 class Rook(ChessPiece):
     """
     In chess, rooks can move an arbitrary number of squares in horizontally and
     vertically. Its value is 5.
     """
 
-    id = 2
-    symbol = "♖"
-    value = 5.0
-    icon = ICONS_FOLDER / "rook.png"
+    @classmethod
+    def get_id(cls: Type["ChessPiece"]) -> int:
+        return 2
 
     @classmethod
-    def attack(cls, _from, _to) -> bool:
+    def get_symbol(cls: Type["ChessPiece"]) -> str:
+        return "♖"
+
+    @classmethod
+    def get_value(cls: Type["ChessPiece"]) -> float:
+        return 5.0
+
+    @classmethod
+    def get_icon(cls: Type["ChessPiece"]) -> Path | None:
+        return ICONS_FOLDER / "rook.png"
+
+    @classmethod
+    def attack(cls, _from: "Square", _to: "Square") -> bool:
         return _from.in_same_file(_to) or _from.in_same_rank(_to)
 
 
+@register_piece
 class Bishop(ChessPiece):
     """
     In chess, bishops can move an arbitrary number of squares in diagonally.
     Its value is 3.
     """
 
-    id = 3
-    symbol = "♗"
-    value = 3.0
-    icon = ICONS_FOLDER / "bishop.png"
+    @classmethod
+    def get_id(cls: Type["ChessPiece"]) -> int:
+        return 3
 
     @classmethod
-    def attack(cls, _from, _to) -> bool:
+    def get_symbol(cls: Type["ChessPiece"]) -> str:
+        return "♗"
+
+    @classmethod
+    def get_value(cls: Type["ChessPiece"]) -> float:
+        return 3.0
+
+    @classmethod
+    def get_icon(cls: Type["ChessPiece"]) -> Path | None:
+        return ICONS_FOLDER / "bishop.png"
+
+    @classmethod
+    def attack(cls, _from: "Square", _to: "Square") -> bool:
         return _from.in_same_diagonal(_to)
 
 
+@register_piece
 class Knight(ChessPiece):
     """
     In chess, knights can move in L. This means that you can move one or two positions
@@ -120,16 +288,28 @@ class Knight(ChessPiece):
     square. Its value is 3.
     """
 
-    id = 4
-    symbol = "♘"
-    value = 3.0
-    icon = ICONS_FOLDER / "knight.png"
+    @classmethod
+    def get_id(cls: Type["ChessPiece"]) -> int:
+        return 4
 
     @classmethod
-    def attack(cls, _from, _to) -> bool:
+    def get_symbol(cls: Type["ChessPiece"]) -> str:
+        return "♘"
+
+    @classmethod
+    def get_value(cls: Type["ChessPiece"]) -> float:
+        return 3.0
+
+    @classmethod
+    def get_icon(cls: Type["ChessPiece"]) -> Path | None:
+        return ICONS_FOLDER / "knight.png"
+
+    @classmethod
+    def attack(cls, _from: "Square", _to: "Square") -> bool:
         return _from.in_same_diagonal(_to)
 
 
+@register_piece
 class King(ChessPiece):
     """
     In chess, kings can move diagonally, horizontally or vertically, but only
@@ -137,11 +317,22 @@ class King(ChessPiece):
     it is set to 4.
     """
 
-    id = 5
-    symbol = "♔"
-    value = 4.0
-    icon = ICONS_FOLDER / "king.png"
+    @classmethod
+    def get_id(cls: Type["ChessPiece"]) -> int:
+        return 5
 
     @classmethod
-    def attack(cls, _from, _to) -> bool:
+    def get_symbol(cls: Type["ChessPiece"]) -> str:
+        return "♔"
+
+    @classmethod
+    def get_value(cls: Type["ChessPiece"]) -> float:
+        return 4.0
+
+    @classmethod
+    def get_icon(cls: Type["ChessPiece"]) -> Path | None:
+        return ICONS_FOLDER / "king.png"
+
+    @classmethod
+    def attack(cls, _from: "Square", _to: "Square") -> bool:
         return _from.distance(_to) == 1

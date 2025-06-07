@@ -1,4 +1,3 @@
-import cmath
 from dataclasses import dataclass
 from enum import auto
 from enum import Enum
@@ -8,6 +7,8 @@ import numpy as np
 from typing_extensions import Self
 
 from queensgym.core.piece import ChessPiece
+from queensgym.core.piece import ChessPieceRegistry
+from queensgym.exceptions import OccupiedSquareError
 
 
 class Color(Enum):
@@ -17,35 +18,10 @@ class Color(Enum):
     BLACK = auto()
 
 
-class Complex(complex):
-    """
-    An extension of the built-in complex type.
-
-    Useful for representing the Squares as complex numbers
-    in a 2-dimensional space.
-    """
-
-    @property
-    def polar(self) -> tuple[float, float]:
-        return cmath.polar(self)
-
-    @property
-    def mod(self) -> float:
-        return abs(self)
-
-    @property
-    def phase(self) -> float:
-        return cmath.phase(self)
-
-
 @dataclass(frozen=True, slots=True)
 class Square:
     file: int
     rank: int
-
-    @classmethod
-    def from_complex(cls, _complex: Complex | complex) -> Self:
-        return cls(file=_complex.real, rank=_complex.imag)
 
     def __post_init__(self) -> None:
         """
@@ -82,11 +58,6 @@ class Square:
         """Unicode character of the piece given its color."""
         return "☐" if self.color is Color.WHITE else "◼︎"
 
-    @property
-    def complex(self) -> Complex:
-        """Complex form of the square given its spatial location."""
-        return Complex(self.file, self.rank)
-
     def in_same_rank(self, other: Self) -> bool:
         if not isinstance(other, Square):
             raise NotImplementedError(
@@ -111,7 +82,7 @@ class Square:
             )
         return abs(self.file - other.file) == abs(self.rank - other.rank)
 
-    def distance(self, other: Self) -> bool:
+    def distance(self, other: Self) -> int:
         if not isinstance(other, Square):
             raise NotImplementedError(
                 f"Cannot determine the distance from the square to an "
@@ -131,13 +102,33 @@ class Board:
     n: int
     state: dict[Square, Type[ChessPiece]]
 
+    @classmethod
+    def max_size(cls: Type[Self]) -> int:
+        """Returns the maximum size of the board."""
+        return cls.max
+
     def __init__(self, n: int) -> None:
+        """
+        Initializes a board with the given dimension.
+
+        Args:
+            n (int): The dimension of the board. Must be a positive integer
+                and 1 <= n <= Board.max.
+
+        Raises:
+            TypeError: If n is not an integer.
+            ValueError: If n is not a positive integer or if it is not in the
+                range 1 <= n <= Board.max.
+        """
         if not isinstance(n, int):
             raise TypeError(f"Board dimension must be a positive integer. Received: {n}.")
-        elif not (1 <= n <= Board.max):
-            raise ValueError(f"Board dimension must be 1<=n<={Board.max}. Received: {n}.")
-        self.n = n
-        self.state = dict()
+        elif not (1 <= n <= self.__class__.max_size()):
+            raise ValueError(
+                f"Board dimension must be 1<=n<={self.__class__.max_size()}. " f"Received: {n}."
+            )
+        else:
+            self.n = n
+            self.state = dict()
 
     @property
     def squares(self) -> list[Square]:
@@ -155,7 +146,8 @@ class Board:
     def seq_to_square(self, seq_square: int) -> Square:
         return Square(file=((seq_square - 1) % self.n) + 1, rank=((seq_square - 1) // self.n) + 1)
 
-    def pprint(self) -> str: ...
+    def pprint(self) -> str:
+        return ""
 
     def get(self, square: Square) -> Type[ChessPiece] | None:
         """Get the piece on a square.
@@ -175,12 +167,12 @@ class Board:
             square (Square): The square to get the piece from.
             piece (Type[ChessPiece]): The piece to place on the square.
         """
-        if piece not in ChessPiece.registry.values():
-            raise TypeError("Piece must be a ChessPiece.")
+        if not ChessPieceRegistry.exists(piece):
+            raise ValueError(f"Piece {piece} is not registered.")
         elif not isinstance(square, Square):
             raise TypeError("Square must be a Square.")
         elif square in self.state:
-            raise ValueError("Square already occupied.")
+            raise OccupiedSquareError(f"Square {square} is already occupied.")
         self.state[square] = piece
 
     def remove(self, square: Square) -> None:
@@ -192,7 +184,19 @@ class Board:
         if square in self.state:
             del self.state[square]
 
-    def matrix(self) -> np.ndarray:
+    def as_array(self) -> np.typing.NDArray[np.int8]:
+        """Build and return the map of the board as an array representation.
+
+        Returns:
+            np.ndarray: array representation of the board.
+        """
+        board_arr = np.zeros(self.n * self.n, dtype=np.int8)
+        for square, piece in self.state.items():
+            idx = self.square_to_seq(square)
+            board_arr[idx - 1] = piece.get_id()
+        return board_arr
+
+    def as_matrix(self) -> np.typing.NDArray[np.int8]:
         """Build and return the map of the board as a matrix representation.
 
         Returns:
@@ -201,10 +205,10 @@ class Board:
         board_map = np.zeros((self.n, self.n), dtype=np.int8)
         for square, piece in self.state.items():
             a, b = self.square_to_numpy(square)
-            board_map[a][b] = piece.id
+            board_map[a][b] = piece.get_id()
         return board_map
 
-    def heat_map(self) -> np.ndarray:
+    def as_heat_map(self) -> np.typing.NDArray[np.int16]:
         """Build and return the heat map of the board.
 
         NOTE could be an expensive operation if `n` is large.
@@ -217,7 +221,7 @@ class Board:
         heat_map = np.zeros((self.n, self.n), dtype=np.int16)
         for i in {(x, y) for x in range(1, self.n + 1) for y in range(1, self.n + 1)}:
             dst_square = Square(*i)
-            a, b = self.square_to_numpy(dst_square=Square(*i))
+            a, b = self.square_to_numpy(square=Square(*i))
             for square, piece in self.state.items():
                 if piece.attack(square, dst_square):
                     heat_map[a][b] += 1
