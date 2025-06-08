@@ -2,12 +2,9 @@ import abc
 from pathlib import Path
 from typing import Any
 from typing import Type
-from typing import TYPE_CHECKING
 
 from queensgym.exceptions import PieceDefinitionError
-
-if TYPE_CHECKING:
-    from queensgym.core.board import Square
+from queensgym.square import Square
 
 
 __all__ = (
@@ -19,13 +16,14 @@ __all__ = (
     "Bishop",
     "Knight",
     "King",
+    "ICONS_FOLDER",
 )
 
 
 ICONS_FOLDER = Path(__file__).parent.parent / "icons"
 
 
-def register_piece(cls: Type["ChessPiece"]) -> Any:
+def register_piece(cls: Type["ChessPiece"]) -> Type["ChessPiece"]:
     """
     Decorator to register a chess piece class in the ChessPieceRegistry.
     See `Queen` class for an example of usage.
@@ -33,7 +31,8 @@ def register_piece(cls: Type["ChessPiece"]) -> Any:
     Args:
         cls (Type[ChessPiece]): The chess piece class to register.
     """
-    return ChessPieceRegistry.add(cls)
+    ChessPieceRegistry.add(cls)
+    return cls
 
 
 class ChessPieceRegistry:
@@ -99,7 +98,7 @@ class ChessPiece(abc.ABC):
         - `get_symbol`: Returns the symbol representing the chess piece.
         - `get_value`: Returns the value of the chess piece.
         - `get_icon`: Returns the icon path for the chess piece.
-        - `attack`: Checks if the piece can attack a target square from a source square.
+        - `_attack`: Checks if the piece can attack a target square from a source square.
     """
 
     @classmethod
@@ -148,7 +147,7 @@ class ChessPiece(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def attack(cls, _from: "Square", _to: "Square") -> bool:
+    def _attack(cls, _from: Square, _to: Square) -> bool:
         """
         Check if the piece can attack the target square from the source square.
 
@@ -195,6 +194,15 @@ class ChessPiece(abc.ABC):
                 f"({cls.__name__}). Value {cls.get_icon()} is invalid."
             )
 
+    @classmethod
+    def attack(cls, _from: Square, _to: Square) -> bool:
+        if not isinstance(_from, Square) or not isinstance(_to, Square):
+            raise TypeError("Both, _from and _to, must be Square objects.")
+        elif _from == _to:
+            return False
+        else:
+            return cls._attack(_from, _to)
+
 
 @register_piece
 class Queen(ChessPiece):
@@ -220,7 +228,7 @@ class Queen(ChessPiece):
         return ICONS_FOLDER / "queen.png"
 
     @classmethod
-    def attack(cls, _from: "Square", _to: "Square") -> bool:
+    def _attack(cls, _from: Square, _to: Square) -> bool:
         return _from.in_same_diagonal(_to) or _from.in_same_file(_to) or _from.in_same_rank(_to)
 
 
@@ -248,7 +256,7 @@ class Rook(ChessPiece):
         return ICONS_FOLDER / "rook.png"
 
     @classmethod
-    def attack(cls, _from: "Square", _to: "Square") -> bool:
+    def _attack(cls, _from: Square, _to: Square) -> bool:
         return _from.in_same_file(_to) or _from.in_same_rank(_to)
 
 
@@ -276,7 +284,7 @@ class Bishop(ChessPiece):
         return ICONS_FOLDER / "bishop.png"
 
     @classmethod
-    def attack(cls, _from: "Square", _to: "Square") -> bool:
+    def _attack(cls, _from: Square, _to: Square) -> bool:
         return _from.in_same_diagonal(_to)
 
 
@@ -305,7 +313,7 @@ class Knight(ChessPiece):
         return ICONS_FOLDER / "knight.png"
 
     @classmethod
-    def attack(cls, _from: "Square", _to: "Square") -> bool:
+    def _attack(cls, _from: Square, _to: Square) -> bool:
         return _from.in_same_diagonal(_to)
 
 
@@ -334,5 +342,5 @@ class King(ChessPiece):
         return ICONS_FOLDER / "king.png"
 
     @classmethod
-    def attack(cls, _from: "Square", _to: "Square") -> bool:
+    def _attack(cls, _from: Square, _to: Square) -> bool:
         return _from.distance(_to) == 1

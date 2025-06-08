@@ -1,94 +1,12 @@
-from dataclasses import dataclass
-from enum import auto
-from enum import Enum
 from typing import Type
 
 import numpy as np
 from typing_extensions import Self
 
-from queensgym.core.piece import ChessPiece
-from queensgym.core.piece import ChessPieceRegistry
 from queensgym.exceptions import OccupiedSquareError
-
-
-class Color(Enum):
-    """A logical distinction between the colors of a board."""
-
-    WHITE = auto()
-    BLACK = auto()
-
-
-@dataclass(frozen=True, slots=True)
-class Square:
-    file: int
-    rank: int
-
-    def __post_init__(self) -> None:
-        """
-        Validates the attributes' values and types.
-
-        Raises:
-            TypeError: if file or rank are not integers.
-            ValueError: if file or rank are not positive.
-        """
-        for attr in self.__annotations__:
-            attr_val = getattr(self, attr)
-            if not isinstance(attr_val, int):
-                raise TypeError(f"Attr '{attr}' must be int, not {type(attr_val).__name__}.")
-            elif attr_val < 1:
-                raise ValueError(f"Attr {attr} must be positive. Received: {attr_val}.")
-
-    @property
-    def column(self) -> int:
-        """Alias for squares' file."""
-        return self.file
-
-    @property
-    def row(self) -> int:
-        """Alias for squares' rank."""
-        return self.rank
-
-    @property
-    def color(self) -> Color:
-        """Logical color of the square given its spatial location."""
-        return Color.WHITE if (self.file + self.rank) % 2 else Color.BLACK
-
-    @property
-    def symbol(self) -> str:
-        """Unicode character of the piece given its color."""
-        return "☐" if self.color is Color.WHITE else "◼︎"
-
-    def in_same_rank(self, other: Self) -> bool:
-        if not isinstance(other, Square):
-            raise NotImplementedError(
-                f"Cannot determine if object of type {type(other).__name__} "
-                "is in the same row as the square."
-            )
-        return self.rank == other.rank
-
-    def in_same_file(self, other: Self) -> bool:
-        if not isinstance(other, Square):
-            raise NotImplementedError(
-                f"Cannot determine if object of type {type(other).__name__} "
-                "is in the same file as the square."
-            )
-        return self.file == other.file
-
-    def in_same_diagonal(self, other: Self) -> bool:
-        if not isinstance(other, Square):
-            raise NotImplementedError(
-                f"Cannot determine if object of type {type(other).__name__} "
-                "is in the same diagonal as the square."
-            )
-        return abs(self.file - other.file) == abs(self.rank - other.rank)
-
-    def distance(self, other: Self) -> int:
-        if not isinstance(other, Square):
-            raise NotImplementedError(
-                f"Cannot determine the distance from the square to an "
-                f"object of type {type(other).__name__}."
-            )
-        return max(abs(self.file - other.file), abs(self.rank - other.rank))
+from queensgym.piece import ChessPiece
+from queensgym.piece import ChessPieceRegistry
+from queensgym.square import Square
 
 
 class Board:
