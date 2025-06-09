@@ -3,6 +3,7 @@ from typing import Type
 import numpy as np
 from typing_extensions import Self
 
+from queensgym.exceptions import InvalidPieceError
 from queensgym.exceptions import OccupiedSquareError
 from queensgym.piece import ChessPiece
 from queensgym.piece import ChessPieceRegistry
@@ -86,7 +87,7 @@ class Board:
             piece (Type[ChessPiece]): The piece to place on the square.
         """
         if not ChessPieceRegistry.exists(piece):
-            raise ValueError(f"Piece {piece} is not registered.")
+            raise InvalidPieceError(f"Piece {piece} is not registered.")
         elif not isinstance(square, Square):
             raise TypeError("Square must be a Square.")
         elif square in self.state:
@@ -101,6 +102,10 @@ class Board:
         """
         if square in self.state:
             del self.state[square]
+
+    def reset(self) -> None:
+        """Remove all the pieces from the board."""
+        self.state = dict()
 
     def as_array(self) -> np.typing.NDArray[np.int8]:
         """Build and return the map of the board as an array representation.
