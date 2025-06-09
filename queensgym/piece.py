@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 from typing import Type
 
+from queensgym.exceptions import InvalidPieceError
 from queensgym.exceptions import PieceDefinitionError
 from queensgym.square import Square
 
@@ -60,16 +61,26 @@ class ChessPieceRegistry:
             PieceDefinitionError: If the piece ID is already in use.
         """
         if not issubclass(piece, ChessPiece):
-            raise PieceDefinitionError(
+            raise InvalidPieceError(
                 f"Only subclasses of ChessPiece can be registered. "
                 f"{piece.__name__} is not a subclass of ChessPiece."
             )
         elif piece.get_id() in cls.__registry:
-            raise PieceDefinitionError(
+            raise InvalidPieceError(
                 f"Id {piece.get_id()} is currently used by "
                 f"piece {cls.__registry[piece.get_id()].__name__}."
             )
         cls.__registry[piece.get_id()] = piece
+
+    @classmethod
+    def get(cls, piece_id: int) -> Type["ChessPiece"]:
+        """ """
+        try:
+            return cls.__registry[piece_id]
+        except (KeyError, TypeError) as e:
+            raise InvalidPieceError(
+                f"Id {piece_id} is not a valid registered id for ChessPiece."
+            ) from e
 
     @classmethod
     def exists(cls, piece: Type["ChessPiece"]) -> bool:
@@ -314,7 +325,12 @@ class Knight(ChessPiece):
 
     @classmethod
     def _attack(cls, _from: Square, _to: Square) -> bool:
-        return _from.in_same_diagonal(_to)
+        return (
+            _from.distance(_to) == 2
+            and not _from.in_same_file(_to)
+            and not _from.in_same_rank(_to)
+            and not _from.in_same_diagonal(_to)
+        )
 
 
 @register_piece
