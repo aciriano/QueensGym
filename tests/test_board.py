@@ -28,6 +28,11 @@ class TestBoard:
         with pytest.raises(ValueError):
             Board(n=n)
 
+    def test_pprint(self) -> None:
+        board = Board(n=3)
+        board.put(Square(1, 1), Queen)
+        assert board.pprint() == "◼︎ ☐ ◼︎ \n☐ ◼︎ ☐ \n♕ ☐ ◼︎ \n"
+
     def test_square_to_numpy(self):
         square = Square(file=1, rank=2)
         Board(n=3).square_to_numpy(square) == 1, 0

@@ -1,3 +1,4 @@
+from io import StringIO
 from typing import Type
 
 import numpy as np
@@ -66,7 +67,17 @@ class Board:
         return Square(file=((seq_square - 1) % self.n) + 1, rank=((seq_square - 1) // self.n) + 1)
 
     def pprint(self) -> str:
-        return ""
+        out = StringIO()
+        for rank in range(self.n, 0, -1):
+            for file in range(1, self.n + 1):
+                sq = Square(file=file, rank=rank)
+                if sq in self.state:
+                    out.write(self.state[sq].get_symbol())
+                else:
+                    out.write(sq.symbol)
+                out.write(" ")
+            out.write("\n")
+        return out.getvalue()
 
     def get(self, square: Square) -> Type[ChessPiece] | None:
         """Get the piece on a square.
