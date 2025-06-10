@@ -83,17 +83,20 @@ class ChessPieceRegistry:
             ) from e
 
     @classmethod
-    def exists(cls, piece: Type["ChessPiece"]) -> bool:
+    def exists(cls, piece: int | Type["ChessPiece"]) -> bool:
         """
         Check if a chess piece is registered in the registry.
 
         Args:
-            piece (Type[ChessPiece]): The chess piece class to check.
+            piece (int | Type[ChessPiece]): The chess piece class or id to check.
 
         Returns:
             bool: True if the piece is registered, False otherwise.
         """
-        return piece in cls.__registry.values()
+        if isinstance(piece, int):
+            return piece in cls.__registry
+        else:
+            return piece in cls.__registry.values()
 
 
 class ChessPiece(abc.ABC):

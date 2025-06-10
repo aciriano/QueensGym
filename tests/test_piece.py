@@ -51,7 +51,11 @@ class TestChessPieceRegistry:
     def test_exists_main_pieces(self, piece: Any) -> None:
         assert ChessPieceRegistry.exists(piece)
 
-    @pytest.mark.parametrize(argnames="piece", argvalues=["", {}, list(), list, 4])
+    @pytest.mark.parametrize(argnames="piece", argvalues=[1, 2, 3, 4, 5])
+    def test_exists_main_pieces_by_id(self, piece: Any) -> None:
+        assert ChessPieceRegistry.exists(piece)
+
+    @pytest.mark.parametrize(argnames="piece", argvalues=["", {}, list(), list])
     def test_non_exists(self, piece: Any) -> None:
         assert not ChessPieceRegistry.exists(piece)
 
