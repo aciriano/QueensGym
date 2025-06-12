@@ -74,13 +74,20 @@ class ChessPieceRegistry:
 
     @classmethod
     def get(cls, piece_id: int) -> Type["ChessPiece"]:
-        """ """
         try:
             return cls.__registry[piece_id]
         except (KeyError, TypeError) as e:
             raise InvalidPieceError(
                 f"Id {piece_id} is not a valid registered id for ChessPiece."
             ) from e
+
+    @classmethod
+    def get_by_name(cls, piece_name: str) -> Type["ChessPiece"]:
+        try:
+            _filter = filter(lambda x: x.__name__ == piece_name, cls.__registry.values())
+            return next(_filter)
+        except StopIteration as e:
+            raise InvalidPieceError(f"There is no piece with name {piece_name}.") from e
 
     @classmethod
     def exists(cls, piece: int | Type["ChessPiece"]) -> bool:

@@ -1,83 +1,120 @@
+"""
+Example:
+>>> from queensgym.piece import Queen, Rook
+>>> from queensgym.factory import RandomBoardFactory
+>>> preplaced = (1, 3)
+>>> pieces = [Queen.get_id(), Rook.get_id()]
+>>> factory = RandomBoardFactory(n=6, pieces=pieces, preplaced=preplaced)
+>>> factory.new().as_matrix()
+array([[0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0]], dtype=int8)
+>>> factory.new().as_matrix()
+array([[0, 0, 0, 0, 0, 1],
+    [0, 0, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 2, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0]], dtype=int8)
+"""
+import abc
 from random import choice
 from random import randint
 from typing import Type
 
+from typing_extensions import override
+
 from queensgym.board import Board
+from queensgym.board import SafeBoard
+from queensgym.exceptions import InvalidDimensionError
 from queensgym.exceptions import InvalidPieceError
+from queensgym.exceptions import UnsafePlacementError
 from queensgym.piece import ChessPiece
 from queensgym.piece import ChessPieceRegistry
 from queensgym.square import Square
 
+__all__ = ("BoardFactory", "SafeBoardFactory", "RandomBoardFactory", "RandomSafeBoardFactory")
 
-class BoardFactory:
+
+class _BoardFactory(abc.ABC):
     """
     A generic class which creates new empty board.Board objects.
-    Subclasses can replace the `new` to initiate the boards with
-    an arragement of pieces based on a predefined criteria.
+    Subclasses can replace the `new` and `configure` methods to
+    initiate the boards with an arragement of pieces based on a
+    predefined criteria.
+
+    The process of building new boards follows these steps:
+        1. The method _init_board() creates a new Board object.
+        2. The method _configure() creates and places an arragement
+            of piece.
+        3. Both methods are invoked by the entrypoint new().
     """
 
     def __init__(self, n: int) -> None:
-        if not isinstance(n, int):
-            raise TypeError(f"Board dimension must be a positive integer. Received: {n}.")
-        elif not (1 <= n <= Board.max_size()):
-            raise ValueError(
-                f"Board dimension must be 1<=n<={Board.max_size()}. " f"Received: {n}."
+        if not Board.valid_dimension(n):
+            raise InvalidDimensionError(
+                f"Dimension {n} is invalid for Board objects. "
+                f"Must be a positive integer in range [1, {Board.max_size()}]"
             )
         else:
             self.n = n
 
+    @abc.abstractmethod
+    def init_board(self) -> Board:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def configure_board(self, board: Board) -> Board:
+        raise NotImplementedError
+
     def new(self) -> Board:
+        board = self.init_board()
+        return self.configure_board(board=board)
+
+
+class BoardFactory(_BoardFactory):
+    def init_board(self) -> Board:
         return Board(n=self.n)
+
+    def configure_board(self, board: Board) -> Board:
+        return board
+
+
+class SafeBoardFactory(BoardFactory):
+    @override
+    def init_board(self) -> Board:
+        return SafeBoard(n=self.n)
 
 
 class RandomBoardFactory(BoardFactory):
-    """
-
-    Example:
-    >>> from queensgym.piece import Queen, Rook
-    >>> from queensgym.factory import RandomBoardFactory
-    >>> factory = RandomBoardFactory(n=6, pieces=[Queen.get_id(), Rook.get_id()], preplaced=(1, 3))
-    >>> factory.new().as_matrix()
-    array([[0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0],
-        [0, 1, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0]], dtype=int8)
-    >>> factory.new().as_matrix()
-    array([[0, 0, 0, 0, 0, 1],
-        [0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 2, 0],
-        [0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0]], dtype=int8)
-    """
-
-    def __init__(self, n: int, pieces: list[int], preplaced: tuple[int, int]) -> None:
-        super().__init__(n)
-        self.pieces = pieces
-        self.preplaced = preplaced
-
-        # Validate the configuration of the factory.
-        self.validate_preplaced()
-        self.validate_pieces()
-
-    def validate_preplaced(self) -> None:
-        type_err = TypeError(f"Preplaced must be a tuple of two int. Received: {self.preplaced}.")
+    def validate(self) -> None:
         if (not isinstance(self.preplaced, tuple)) or len(self.preplaced) != 2:
-            raise type_err
+            raise TypeError(f"Preplaced must be a tuple of two int. Received: {self.preplaced}.")
         elif not all(isinstance(i, int) for i in self.preplaced):
-            raise type_err
+            raise TypeError(f"Preplaced must be a tuple of two int. Received: {self.preplaced}.")
         elif not (0 <= self.preplaced[0] <= self.preplaced[0] <= self.n**2):
             raise ValueError("Condition 0 <= min <= max <= n**2 is not met.")
-
-    def validate_pieces(self) -> None:
-        if not isinstance(self.pieces, list):
+        elif not isinstance(self.pieces, list):
             raise TypeError(f"Pieces must be a list of integers. Received: {self.pieces}.")
         elif not all(isinstance(p, int) for p in self.pieces):
             raise TypeError("All pieces must be integers.")
         elif not all(ChessPieceRegistry.exists(p) for p in self.pieces):
             raise InvalidPieceError("All pieces must exist in ChessPieceRegistry.")
+        elif (not isinstance(self.iters, int)) or self.iters < 1:
+            raise TypeError(f"Iters must be a positive integer. Value {self.iters} is invalid.")
+
+    @override
+    def __init__(
+        self, n: int, pieces: list[int], preplaced: tuple[int, int], iters: int | None = None
+    ) -> None:
+        super().__init__(n)
+        self.pieces = pieces
+        self.preplaced = preplaced
+        self.iters = iters if isinstance(iters, int) else n
+        self.validate()
 
     def choose_preplaced(self) -> int:
         return randint(self.preplaced[0], self.preplaced[1])
@@ -85,16 +122,77 @@ class RandomBoardFactory(BoardFactory):
     def choose_piece(self) -> Type[ChessPiece]:
         return ChessPieceRegistry.get(choice(self.pieces))
 
-    def choose_square(self) -> Square:
-        return Square(file=randint(1, self.n), rank=randint(1, self.n))
+    def choose_square(self, board: Board) -> Square:
+        tries = 0
+        square = board.get_empty_square()
+        while square is None:
+            tries += 1
+            if tries == self.iters:
+                raise StopIteration(
+                    f"Total number of iterations have been reached ({self.iters})"
+                    f"while selecting a new empty square."
+                )
+            else:
+                square = board.get_empty_square()
+        return square
 
-    def new(self) -> Board:
-        board = super().new()
+    @override
+    def configure_board(self, board: Board) -> Board:
         n_preplaced = self.choose_preplaced()
-        while len(board.squares) != n_preplaced:
-            square = self.choose_square()
-            piece = self.choose_piece()
-            while square in board.squares:
-                square = self.choose_square()
-            board.put(square=square, piece=piece)
+        while board.total_placed() < n_preplaced:
+            try:
+                square = self.choose_square(board=board)
+            except StopIteration:
+                if board.total_placed() >= self.preplaced[0]:
+                    return board
+                else:
+                    raise
+            else:
+                piece = self.choose_piece()
+                board.put(square=square, piece=piece)
+        return board
+
+
+class RandomSafeBoardFactory(RandomBoardFactory):
+    @override
+    def choose_square(self, board: Board) -> Square:
+        tries = 0
+        square = board.get_safe_square()
+        while square is None:
+            tries += 1
+            if tries == self.iters:
+                raise StopIteration(
+                    f"Total number of iterations have been reached ({self.iters})"
+                    f"while selecting a new safe square."
+                )
+            else:
+                square = board.get_safe_square()
+        return square
+
+    @override
+    def configure_board(self, board: Board) -> Board:
+        iters = 0
+        n_preplaced = self.choose_preplaced()
+        while board.total_placed() < n_preplaced:
+            try:
+                square = self.choose_square(board=board)
+            except StopIteration:
+                if board.total_placed() >= self.preplaced[0]:
+                    return board
+                else:
+                    raise
+            else:
+                try:
+                    piece = self.choose_piece()
+                    board.put(square=square, piece=piece)
+                except UnsafePlacementError:
+                    iters += 1
+                    if iters == self.iters:
+                        if board.total_placed() >= self.preplaced[0]:
+                            return board
+                        else:
+                            raise StopIteration(
+                                f"Total number of iterations have been reached ({self.iters})"
+                                f"while adding a new piece without attacks."
+                            )
         return board
