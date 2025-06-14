@@ -56,7 +56,7 @@ markers = [
     "slow: tests that require more time to be executed."
 ]
 testpaths = "tests"
-addopts = "-m 'not slow' --cov=queensgym --cov-report=html --disable-warnings -vv"
+addopts = "--cov=queensgym --cov-report=html --disable-warnings -vv"
 
 [tool.ruff]
 line-length = 100

@@ -29,8 +29,10 @@ from typing_extensions import override
 
 from queensgym.board import Board
 from queensgym.board import SafeBoard
+from queensgym.exceptions import GenerationError
 from queensgym.exceptions import InvalidDimensionError
 from queensgym.exceptions import InvalidPieceError
+from queensgym.exceptions import NoMoreSafeSquaresError
 from queensgym.exceptions import UnsafePlacementError
 from queensgym.piece import ChessPiece
 from queensgym.piece import ChessPieceRegistry
@@ -95,25 +97,20 @@ class RandomBoardFactory(BoardFactory):
             raise TypeError(f"Preplaced must be a tuple of two int. Received: {self.preplaced}.")
         elif not all(isinstance(i, int) for i in self.preplaced):
             raise TypeError(f"Preplaced must be a tuple of two int. Received: {self.preplaced}.")
-        elif not (0 <= self.preplaced[0] <= self.preplaced[0] <= self.n**2):
+        elif not (0 <= self.preplaced[0] <= self.preplaced[1] <= self.n**2):
             raise ValueError("Condition 0 <= min <= max <= n**2 is not met.")
-        elif not isinstance(self.pieces, list):
+        elif (not isinstance(self.pieces, list)) or not self.pieces:
             raise TypeError(f"Pieces must be a list of integers. Received: {self.pieces}.")
         elif not all(isinstance(p, int) for p in self.pieces):
             raise TypeError("All pieces must be integers.")
         elif not all(ChessPieceRegistry.exists(p) for p in self.pieces):
             raise InvalidPieceError("All pieces must exist in ChessPieceRegistry.")
-        elif (not isinstance(self.iters, int)) or self.iters < 1:
-            raise TypeError(f"Iters must be a positive integer. Value {self.iters} is invalid.")
 
     @override
-    def __init__(
-        self, n: int, pieces: list[int], preplaced: tuple[int, int], iters: int | None = None
-    ) -> None:
+    def __init__(self, n: int, pieces: list[int], preplaced: tuple[int, int]) -> None:
         super().__init__(n)
         self.pieces = pieces
         self.preplaced = preplaced
-        self.iters = iters if isinstance(iters, int) else n
         self.validate()
 
     def choose_preplaced(self) -> int:
@@ -122,32 +119,20 @@ class RandomBoardFactory(BoardFactory):
     def choose_piece(self) -> Type[ChessPiece]:
         return ChessPieceRegistry.get(choice(self.pieces))
 
-    def choose_square(self, board: Board) -> Square:
-        tries = 0
-        square = board.get_empty_square()
-        while square is None:
-            tries += 1
-            if tries == self.iters:
-                raise StopIteration(
-                    f"Total number of iterations have been reached ({self.iters})"
-                    f"while selecting a new empty square."
-                )
-            else:
-                square = board.get_empty_square()
-        return square
+    def choose_square(self, board: Board) -> Square | None:
+        return board.get_empty_square()
 
     @override
     def configure_board(self, board: Board) -> Board:
         n_preplaced = self.choose_preplaced()
         while board.total_placed() < n_preplaced:
-            try:
-                square = self.choose_square(board=board)
-            except StopIteration:
-                if board.total_placed() >= self.preplaced[0]:
-                    return board
-                else:
-                    raise
+            square = self.choose_square(board=board)
+            if square is None:
+                # Then, there is no more empty squares. Board is returned.
+                # NOTE: this is impossible as max(preplaced) <= n**2
+                return board
             else:
+                # Choose a piece and put in the board.
                 piece = self.choose_piece()
                 board.put(square=square, piece=piece)
         return board
@@ -155,19 +140,23 @@ class RandomBoardFactory(BoardFactory):
 
 class RandomSafeBoardFactory(RandomBoardFactory):
     @override
-    def choose_square(self, board: Board) -> Square:
-        tries = 0
-        square = board.get_safe_square()
-        while square is None:
-            tries += 1
-            if tries == self.iters:
-                raise StopIteration(
-                    f"Total number of iterations have been reached ({self.iters})"
-                    f"while selecting a new safe square."
-                )
-            else:
-                square = board.get_safe_square()
-        return square
+    def __init__(
+        self, n: int, pieces: list[int], preplaced: tuple[int, int], iters: int | None = None
+    ):
+        iters = iters if isinstance(iters, int) else n
+        if iters < 1:
+            raise ValueError(f"Iters must be a positive integer. Value {iters} is invalid.")
+        else:
+            super().__init__(n, pieces, preplaced)
+            self.iters = iters
+
+    @override
+    def choose_square(self, board: Board) -> Square | None:
+        return board.get_safe_square()
+
+    @override
+    def init_board(self) -> Board:
+        return SafeBoard(n=self.n)
 
     @override
     def configure_board(self, board: Board) -> Board:
@@ -176,23 +165,34 @@ class RandomSafeBoardFactory(RandomBoardFactory):
         while board.total_placed() < n_preplaced:
             try:
                 square = self.choose_square(board=board)
-            except StopIteration:
-                if board.total_placed() >= self.preplaced[0]:
-                    return board
+                if square is None:
+                    raise NoMoreSafeSquaresError
                 else:
-                    raise
-            else:
-                try:
                     piece = self.choose_piece()
                     board.put(square=square, piece=piece)
-                except UnsafePlacementError:
-                    iters += 1
-                    if iters == self.iters:
-                        if board.total_placed() >= self.preplaced[0]:
-                            return board
-                        else:
-                            raise StopIteration(
-                                f"Total number of iterations have been reached ({self.iters})"
-                                f"while adding a new piece without attacks."
-                            )
+            except (UnsafePlacementError, NoMoreSafeSquaresError):
+                # UnsafePlacementError: This can happen if the new piece has
+                # not symetrical attack relation with the rest of the pieces.
+                # For example, to place a queen in a safe square of a board where
+                # only queens are placed is, 'a priori' and 'a posteriori', safe.
+                # But, to place a knight in the same board could potentially
+                # be unsafe 'a posteriori'.
+                iters += 1
+                if iters < self.iters:
+                    # Then, reset the board and try again.
+                    board.reset()
+                else:
+                    if board.total_placed() >= self.preplaced[0]:
+                        # Then, drop random pieces and return the board at the end
+                        # to avoid returning a blocked board.
+                        to_delete = board.total_placed() - self.preplaced[0]
+                        for _ in range(to_delete):
+                            sq_to_delete = choice(board.squares)
+                            board.remove(square=sq_to_delete)
+                        return board
+                    else:
+                        raise GenerationError(
+                            f"Total number of iterations have been reached ({self.iters}) without "
+                            f"placing a minimum of {self.preplaced[0]} pieces in safe squares."
+                        )
         return board
