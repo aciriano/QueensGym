@@ -1,25 +1,3 @@
-"""
-Example:
->>> from queensgym.piece import Queen, Rook
->>> from queensgym.factory import RandomBoardFactory
->>> preplaced = (1, 3)
->>> pieces = [Queen.get_id(), Rook.get_id()]
->>> factory = RandomBoardFactory(n=6, pieces=pieces, preplaced=preplaced)
->>> factory.new().as_matrix()
-array([[0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 1, 1, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0]], dtype=int8)
->>> factory.new().as_matrix()
-array([[0, 0, 0, 0, 0, 1],
-    [0, 0, 1, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 2, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0]], dtype=int8)
-"""
 import abc
 from random import choice
 from random import randint
@@ -78,6 +56,10 @@ class _BoardFactory(abc.ABC):
 
 
 class BoardFactory(_BoardFactory):
+    """
+    A factory class to create new empty Board objects.
+    """
+
     def init_board(self) -> Board:
         return Board(n=self.n)
 
@@ -86,13 +68,37 @@ class BoardFactory(_BoardFactory):
 
 
 class SafeBoardFactory(BoardFactory):
+    """
+    A factory class to create new empty SafeBoard objects.
+    """
+
     @override
     def init_board(self) -> Board:
         return SafeBoard(n=self.n)
 
 
 class RandomBoardFactory(BoardFactory):
+    """
+    A factory class to create new Board objects with a random arrangement of pieces.
+
+    The arrangement is based on a predefined number of pieces to be placed and a list of
+    piece IDs to choose from. The preplaced parameter defines the minimum and maximum number
+    of pieces to be placed on the board.
+    """
+
+    preplaced: tuple[int, int]
+    pieces: list[int]
+
     def validate(self) -> None:
+        """
+        Validates the parameters of the factory.
+
+        Raises:
+            TypeError: If preplaced is not a tuple of two integers.
+            ValueError: If the condition 0 <= min <= max <= n**2 is not met.
+            TypeError: If pieces is not a list of integers.
+            InvalidPieceError: If any piece does not exist in ChessPieceRegistry.
+        """
         if (not isinstance(self.preplaced, tuple)) or len(self.preplaced) != 2:
             raise TypeError(f"Preplaced must be a tuple of two int. Received: {self.preplaced}.")
         elif not all(isinstance(i, int) for i in self.preplaced):
@@ -114,16 +120,28 @@ class RandomBoardFactory(BoardFactory):
         self.validate()
 
     def choose_preplaced(self) -> int:
+        """Choose a random number of pieces to be preplaced in the board."""
         return randint(self.preplaced[0], self.preplaced[1])
 
     def choose_piece(self) -> Type[ChessPiece]:
+        """Choose a random piece from the list of pieces."""
         return ChessPieceRegistry.get(choice(self.pieces))
 
     def choose_square(self, board: Board) -> Square | None:
+        """Choose an empty square from the board."""
         return board.get_empty_square()
 
     @override
     def configure_board(self, board: Board) -> Board:
+        """
+        Configure the board by placing a random number of pieces in random squares.
+
+        Args:
+            board (Board): The board to configure.
+
+        Returns:
+            Board: The configured board with pieces placed.
+        """
         n_preplaced = self.choose_preplaced()
         while board.total_placed() < n_preplaced:
             square = self.choose_square(board=board)
@@ -139,10 +157,42 @@ class RandomBoardFactory(BoardFactory):
 
 
 class RandomSafeBoardFactory(RandomBoardFactory):
+    """
+    A factory class to create new SafeBoard objects with a random arrangement of pieces
+    in safe squares.
+
+    It inherits from RandomBoardFactory and overrides the methods to ensure that
+    pieces are placed in safe squares only. The maximum number of iterations to place
+    the pieces can be specified, and if the minimum number of pieces is not placed
+    within the allowed iterations, a GenerationError is raised.
+
+    Example:
+    >>> from queensgym.piece import Queen, Rook
+    >>> from queensgym.factory import RandomSafeBoardFactory
+    >>> preplaced = (1, 3)
+    >>> pieces = [Queen.get_id(), Rook.get_id()]
+    >>> factory = RandomSafeBoardFactory(n=6, pieces=pieces, preplaced=preplaced, iters=100)
+    >>> factory.new().as_matrix()
+    """
+
     @override
     def __init__(
         self, n: int, pieces: list[int], preplaced: tuple[int, int], iters: int | None = None
     ):
+        """
+        Initialize the RandomSafeBoardFactory with the board size, pieces, preplaced pieces,
+        and the maximum number of iterations allowed for placing pieces.
+
+        Args:
+            n (int): The size of the board (n x n).
+            pieces (list[int]): A list of piece IDs to choose from.
+            preplaced (tuple[int, int]): A tuple defining the minimum and maximum number of pieces
+                to be placed on the board.
+            iters (int | None): The maximum number of iterations allowed to place pieces.
+
+        Raises:
+            ValueError: If iters is not a positive integer.
+        """
         iters = iters if isinstance(iters, int) else n
         if iters < 1:
             raise ValueError(f"Iters must be a positive integer. Value {iters} is invalid.")
@@ -152,14 +202,33 @@ class RandomSafeBoardFactory(RandomBoardFactory):
 
     @override
     def choose_square(self, board: Board) -> Square | None:
+        """Choose a safe square from the board."""
         return board.get_safe_square()
 
     @override
     def init_board(self) -> Board:
+        """Initialize a new SafeBoard object."""
         return SafeBoard(n=self.n)
 
     @override
     def configure_board(self, board: Board) -> Board:
+        """
+        Configure the board by placing a random number of pieces in safe squares.
+
+        A maximum number of iterations is allowed to place the pieces.
+        If the maximum number of iterations is reached without placing
+        the minimum number of pieces, a GenerationError is raised.
+
+        Args:
+            board (Board): The board to configure.
+
+        Returns:
+            Board: The configured board with pieces placed.
+
+        Raises:
+            GenerationError: If the maximum number of iterations is reached
+                without placing the minimum number of pieces.
+        """
         iters = 0
         n_preplaced = self.choose_preplaced()
         while board.total_placed() < n_preplaced:

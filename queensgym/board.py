@@ -3,6 +3,7 @@ from typing import Any
 from typing import Type
 
 import numpy as np
+from typing_extensions import override
 from typing_extensions import Self
 
 from queensgym.exceptions import InvalidDimensionError
@@ -19,9 +20,17 @@ __all__ = ("Board", "SafeBoard")
 
 class Board:
     """
-    If you manually increase the Board.max value, please note that a
-    value greater than 65_535 could cause an OveflowError in runtime
-    when you invoke the method `heat_map`.
+    A chess board of dimension n x n.
+
+    The board is represented as a dictionary where the keys are `Square`
+    instances and the values are `ChessPiece` instances.
+
+    The maximum size of the board is defined by the class variable `max`.
+    The default value is 65_535, which is the maximum value for a 16-bit
+    unsigned integer. You can change this value to increase the maximum
+    size of the board. However, please note that increasing this value may
+    lead to performance issues and memory consumption, especially when using
+    methods like `heat_map`.
     """
 
     max: int = 65_535
@@ -116,6 +125,11 @@ class Board:
         Args:
             square (Square): The square to get the piece from.
             piece (Type[ChessPiece]): The piece to place on the square.
+
+        Raises:
+            InvalidPieceError: If the piece is not registered in the ChessPieceRegistry.
+            TypeError: If the square is not a Square instance.
+            OccupiedSquareError: If the square is already occupied by another piece.
         """
         if not ChessPieceRegistry.exists(piece):
             raise InvalidPieceError(f"Piece {piece} is not registered.")
@@ -139,7 +153,8 @@ class Board:
         self.state = dict()
 
     def as_array(self) -> np.typing.NDArray[np.uint8]:
-        """Build and return the map of the board as an array representation.
+        """
+        Build and return the map of the board as an array representation.
 
         Returns:
             np.ndarray: array representation of the board.
@@ -151,7 +166,8 @@ class Board:
         return board_arr
 
     def as_matrix(self) -> np.typing.NDArray[np.uint8]:
-        """Build and return the map of the board as a matrix representation.
+        """
+        Build and return the map of the board as a matrix representation.
 
         Returns:
             np.ndarray: matrix representation of the board.
@@ -163,14 +179,15 @@ class Board:
         return board_map
 
     def as_heat_map(self) -> np.typing.NDArray[np.uint16]:
-        """Build and return the heat map of the board.
+        """
+        Build and return the heat map of the board.
 
         NOTE could be an expensive operation if `n` is large.
 
         Returns:
-            np.ndarray: heat map representation of the board as an
-            `n` by `n` array where each position keeps the number of
-            pieces that are attacking the correspondant square in the board.
+            np.ndarray: heat map representation of the board as an `n`
+                by `n` array where each position keeps the number of pieces
+                that are attacking the correspondant square in the board.
         """
         heat_map = np.zeros((self.n, self.n), dtype=np.uint16)
         for i in {(x, y) for x in range(1, self.n + 1) for y in range(1, self.n + 1)}:
@@ -182,16 +199,29 @@ class Board:
         return heat_map
 
     def get_empty_square(self) -> Square | None:
-        matrix = self.as_matrix()
-        x, y = np.where(matrix == 0)
-        if len(x):
+        """
+        Get a random empty square on the board.
+
+        Returns:
+            Square | None: A random empty square if available, otherwise None.
+        """
+        if self.total_placed() == self.n * self.n:
+            return None
+        else:
+            matrix = self.as_matrix()
+            x, y = np.where(matrix == 0)
             chosen_idx = np.random.randint(0, len(x))
             chosen = int(x[chosen_idx]), int(y[chosen_idx])
             return self.numpy_to_square(np_square=chosen)
-        else:
-            return None
 
     def get_safe_square(self) -> Square | None:
+        """
+        Get a random empty square that is not under attack by any piece on the board.
+
+        Returns:
+            Square | None: A random empty square that is not under attack,
+                or None if no such square exists.
+        """
         heat_map = self.as_heat_map()
         matrix = self.as_matrix()
         x, y = np.where((heat_map == 0) & (matrix == 0))
@@ -205,13 +235,26 @@ class Board:
 
 class SafeBoard(Board):
     """
-    A board that only allows pieces to be added if they do not attack each other.
+    A chess board that ensures safe placement of pieces.
 
-    This class extends the Board class to ensure that any piece added to the board
-    does not place any other piece under attack, maintaining a safe state.
+    This board extends the basic Board class and adds a safety check
+    when placing pieces. If a piece is placed in such a way that it
+    would be attacked by another piece already on the board, an
+    `UnsafePlacementError` is raised.
     """
 
+    @override
     def put(self, square: Square, piece: Type[ChessPiece]) -> None:
+        """
+        Place a piece on a square, ensuring that the board remains in a safe state.
+
+        Args:
+            square (Square): The square to place the piece on.
+            piece (Type[ChessPiece]): The piece to place on the square.
+
+        Raises:
+            UnsafePlacementError: If placing the piece would break the safe state of the board.
+        """
         super().put(square, piece)
         if not self.is_safe():
             self.remove(square)
@@ -220,6 +263,13 @@ class SafeBoard(Board):
             )
 
     def is_safe(self) -> bool:
+        """
+        Check if the board is in a safe state. A board is considered safe if
+        no two pieces can attack each other.
+
+        Returns:
+            bool: True if the board is safe, False otherwise.
+        """
         for i, _from in enumerate(self.squares):
             for _to in self.squares[i + 1 : :]:
                 if self.state[_from].attack(_from, _to) or self.state[_to].attack(_to, _from):
