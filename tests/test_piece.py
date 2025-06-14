@@ -51,7 +51,11 @@ class TestChessPieceRegistry:
     def test_exists_main_pieces(self, piece: Any) -> None:
         assert ChessPieceRegistry.exists(piece)
 
-    @pytest.mark.parametrize(argnames="piece", argvalues=["", {}, list(), list, 4])
+    @pytest.mark.parametrize(argnames="piece", argvalues=[1, 2, 3, 4, 5])
+    def test_exists_main_pieces_by_id(self, piece: Any) -> None:
+        assert ChessPieceRegistry.exists(piece)
+
+    @pytest.mark.parametrize(argnames="piece", argvalues=["", {}, list(), list])
     def test_non_exists(self, piece: Any) -> None:
         assert not ChessPieceRegistry.exists(piece)
 
@@ -63,6 +67,15 @@ class TestChessPieceRegistry:
     def test_get_invalid_piece(self, piece_id: Any) -> None:
         with pytest.raises(InvalidPieceError):
             ChessPieceRegistry.get(piece_id)
+
+    @pytest.mark.parametrize(argnames="piece", argvalues=[Queen, Rook, Bishop, Knight, King])
+    def test_get_by_name(self, piece: Any) -> None:
+        assert ChessPieceRegistry.get_by_name(piece.__name__) == piece
+
+    @pytest.mark.parametrize(argnames="piece_name", argvalues=["not a piece"])
+    def test_get_by_name_invalid_piece(self, piece_name: str) -> None:
+        with pytest.raises(InvalidPieceError):
+            ChessPieceRegistry.get_by_name(piece_name)
 
 
 class TestChessPiece:
