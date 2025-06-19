@@ -64,7 +64,7 @@ class TestRandomBoardFactory:
     def test_init(self) -> None:
         fact = RandomBoardFactory(n=6, pieces=[Queen.get_id()], preplaced=(1, 1))
         assert fact.n == 6
-        assert issubclass(RandomBoardFactory, BoardFactory)
+        assert issubclass(RandomBoardFactory, _BoardFactory)
 
     def test_init_invalid_preplaced(self) -> None:
         for i in [None, (1, 1, 1), (1, "")]:
