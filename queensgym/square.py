@@ -83,3 +83,40 @@ class Square:
                 f"object of type {type(other).__name__}."
             )
         return max(abs(self.file - other.file), abs(self.rank - other.rank))
+
+    def get_related(self, limit: int, offset: tuple[int, int]) -> list["Square"]:
+        """
+        Returns a list of squares related to the current square.
+
+        Args:
+            limit (int): The maximum value for file/rank in the output squares.
+            offset (tuple[int, int]): A tuple of (file_offset, rank_offset) to apply to the square.
+
+        Returns:
+            list[Square]: A list of related squares.
+        """
+        if (not isinstance(limit, int)) or limit <= 0:
+            raise ValueError(f"Limit must be a positive integer. '{limit}' is invalid.")
+
+        if not isinstance(offset, tuple) or len(offset) != 2:
+            raise TypeError(f"Offset must be a tuple of two integers. '{offset}' is invalid.")
+
+        if not all(isinstance(i, int) for i in offset):
+            raise TypeError(f"Offset must be a tuple of two integers. '{offset}' is invalid.")
+
+        out = []
+        dx, dy = offset
+
+        # Initialize the current file and rank based on the offset.
+        _file, _rank = self.file + dx, self.rank + dy
+
+        # Ensure the current square is within the limits. Append it and update the file/rank
+        # until it goes out of bounds.
+        while max(_file, _rank) <= limit and min(_file, _rank) > 0:
+            related_square = Square(file=_file, rank=_rank)
+            out.append(related_square)
+
+            # Move to the next square in the specified direction.
+            _file += dx
+            _rank += dy
+        return out

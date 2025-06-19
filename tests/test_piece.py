@@ -29,6 +29,7 @@ def create_piece(
             "get_symbol": classmethod(lambda cls: _symbol),
             "get_icon": classmethod(lambda cls: _icon),
             "_attack": classmethod(lambda cls, _from, _to: True),
+            "_attacked": classmethod(lambda cls, _from, limit: [Square(1, 1)]),
         },
     )
 
@@ -110,6 +111,17 @@ class TestChessPiece:
         with pytest.raises(TypeError):
             my_class.attack(Square(1, 1), 1)
 
+    def test_attacked_error(self) -> None:
+        my_class = create_piece("MyClass", 100, 1.0, "A")
+        with pytest.raises(TypeError):
+            my_class.attacked(Square(1, 1, []))
+
+        with pytest.raises(TypeError):
+            my_class.attacked([], 5)
+
+        with pytest.raises(ValueError):
+            my_class.attacked(Square(1, 1), 0)
+
 
 class TestQueen:
     """
@@ -148,6 +160,23 @@ class TestQueen:
     def test_attack(self, sq1: Square, sq2: Square, expected: bool) -> None:
         assert Queen.attack(sq1, sq2) is expected
 
+    def test_attacked(self) -> None:
+        sq = Square(1, 1)
+        attacked_squares = Queen.attacked(sq, 4)
+        assert isinstance(attacked_squares, list)
+        assert len(attacked_squares) == 9
+        assert set(attacked_squares) == {
+            Square(1, 2),
+            Square(1, 3),
+            Square(1, 4),
+            Square(2, 1),
+            Square(3, 1),
+            Square(4, 1),
+            Square(2, 2),
+            Square(3, 3),
+            Square(4, 4),
+        }
+
 
 class TestRook:
     """
@@ -181,6 +210,20 @@ class TestRook:
     )
     def test_attack(self, sq1: Square, sq2: Square, expected: bool) -> None:
         assert Rook.attack(sq1, sq2) is expected
+
+    def test_attacked(self) -> None:
+        sq = Square(1, 1)
+        attacked_squares = Rook.attacked(sq, 4)
+        assert isinstance(attacked_squares, list)
+        assert len(attacked_squares) == 6
+        assert set(attacked_squares) == {
+            Square(1, 2),
+            Square(1, 3),
+            Square(1, 4),
+            Square(2, 1),
+            Square(3, 1),
+            Square(4, 1),
+        }
 
 
 class TestBishop:
@@ -216,6 +259,13 @@ class TestBishop:
     def test_attack(self, sq1: Square, sq2: Square, expected: bool) -> None:
         assert Bishop.attack(sq1, sq2) is expected
 
+    def test_attacked(self) -> None:
+        sq = Square(1, 1)
+        attacked_squares = Bishop.attacked(sq, 4)
+        assert isinstance(attacked_squares, list)
+        assert len(attacked_squares) == 3
+        assert set(attacked_squares) == {Square(2, 2), Square(3, 3), Square(4, 4)}
+
 
 class TestKnight:
     """
@@ -249,6 +299,13 @@ class TestKnight:
     )
     def test_attack(self, sq1: Square, sq2: Square, expected: bool) -> None:
         assert Knight.attack(sq1, sq2) is expected
+
+    def test_attacked(self) -> None:
+        sq = Square(1, 1)
+        attacked_squares = Knight.attacked(sq, 4)
+        assert isinstance(attacked_squares, list)
+        assert len(attacked_squares) == 2
+        assert set(attacked_squares) == {Square(3, 2), Square(2, 3)}
 
 
 class TestKing:
@@ -287,3 +344,14 @@ class TestKing:
     )
     def test_attack(self, sq1: Square, sq2: Square, expected: bool) -> None:
         assert King.attack(sq1, sq2) is expected
+
+    def test_attacked(self) -> None:
+        sq = Square(1, 1)
+        attacked_squares = King.attacked(sq, 4)
+        assert isinstance(attacked_squares, list)
+        assert len(attacked_squares) == 3
+        assert set(attacked_squares) == {
+            Square(1, 2),
+            Square(2, 1),
+            Square(2, 2),
+        }

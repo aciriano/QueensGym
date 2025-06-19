@@ -168,7 +168,7 @@ class ChessPiece(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def _attack(cls, _from: Square, _to: Square) -> bool:
+    def _attack(cls: Type["ChessPiece"], _from: Square, _to: Square) -> bool:
         """
         Check if the piece can attack the target square from the source square.
 
@@ -178,6 +178,22 @@ class ChessPiece(abc.ABC):
 
         Returns:
             bool: True if the piece can attack the target square, False otherwise.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def _attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        """
+        List all squares which are attacked by the piece if it is located
+        in '_from' square and the rank and file limits are 'limit'.
+
+        Args:
+            _from (Square): The square from which the piece is moving.
+            limit (n): Maximum value for file/rank of attacked squares.
+
+        Returns:
+            list[Square: All attacked squares by the piece.
         """
         raise NotImplementedError
 
@@ -216,13 +232,22 @@ class ChessPiece(abc.ABC):
             )
 
     @classmethod
-    def attack(cls, _from: Square, _to: Square) -> bool:
+    def attack(cls: Type["ChessPiece"], _from: Square, _to: Square) -> bool:
         if not isinstance(_from, Square) or not isinstance(_to, Square):
             raise TypeError("Both, _from and _to, must be Square objects.")
         elif _from == _to:
             return False
         else:
             return cls._attack(_from, _to)
+
+    @classmethod
+    def attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        if not isinstance(_from, Square):
+            raise TypeError(f"Parameter _from must be a Square object. {_from} is invalid.")
+        elif (not isinstance(limit, int)) or limit <= 0:
+            raise ValueError(f"Limit must be a positive integer. '{limit}' is invalid.")
+        else:
+            return cls._attacked(_from, limit)
 
 
 @register_piece
@@ -249,8 +274,12 @@ class Queen(ChessPiece):
         return ICONS_FOLDER / "queen.png"
 
     @classmethod
-    def _attack(cls, _from: Square, _to: Square) -> bool:
-        return _from.in_same_diagonal(_to) or _from.in_same_file(_to) or _from.in_same_rank(_to)
+    def _attack(cls: Type["ChessPiece"], _from: Square, _to: Square) -> bool:
+        return Rook._attack(_from, _to) or Bishop._attack(_from, _to)
+
+    @classmethod
+    def _attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        return Rook._attacked(_from, limit) + Bishop._attacked(_from, limit)
 
 
 @register_piece
@@ -277,8 +306,19 @@ class Rook(ChessPiece):
         return ICONS_FOLDER / "rook.png"
 
     @classmethod
-    def _attack(cls, _from: Square, _to: Square) -> bool:
+    def _attack(cls: Type["ChessPiece"], _from: Square, _to: Square) -> bool:
         return _from.in_same_file(_to) or _from.in_same_rank(_to)
+
+    @classmethod
+    def _attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        vectors = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        attacked: list[list[Square]] = [_from.get_related(limit, vector) for vector in vectors]
+
+        # Flat the list of attacked squares.
+        out = []
+        for squares in attacked:
+            out.extend(squares)
+        return out
 
 
 @register_piece
@@ -305,8 +345,19 @@ class Bishop(ChessPiece):
         return ICONS_FOLDER / "bishop.png"
 
     @classmethod
-    def _attack(cls, _from: Square, _to: Square) -> bool:
+    def _attack(cls: Type["ChessPiece"], _from: Square, _to: Square) -> bool:
         return _from.in_same_diagonal(_to)
+
+    @classmethod
+    def _attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        vectors = [(1, 1), (-1, -1), (1, -1), (-1, 1)]
+        attacked: list[list[Square]] = [_from.get_related(limit, vector) for vector in vectors]
+
+        # Flat the list of attacked squares.
+        out = []
+        for squares in attacked:
+            out.extend(squares)
+        return out
 
 
 @register_piece
@@ -342,6 +393,16 @@ class Knight(ChessPiece):
             and not _from.in_same_diagonal(_to)
         )
 
+    @classmethod
+    def _attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        vectors = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), (-1, -2)]
+        attacked_squares = [(_from.file + v[0], _from.rank + v[1]) for v in vectors]
+        return [
+            Square(file, rank)
+            for file, rank in attacked_squares
+            if 0 < file <= limit and 0 < rank <= limit
+        ]
+
 
 @register_piece
 class King(ChessPiece):
@@ -370,3 +431,13 @@ class King(ChessPiece):
     @classmethod
     def _attack(cls, _from: Square, _to: Square) -> bool:
         return _from.distance(_to) == 1
+
+    @classmethod
+    def _attacked(cls: Type["ChessPiece"], _from: Square, limit: int) -> list[Square]:
+        vectors = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+        attacked_squares = [(_from.file + v[0], _from.rank + v[1]) for v in vectors]
+        return [
+            Square(file, rank)
+            for file, rank in attacked_squares
+            if 0 < file <= limit and 0 < rank <= limit
+        ]
