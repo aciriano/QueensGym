@@ -17,15 +17,16 @@ class Episode:
     steps: list[Step] = field(init=False, default_factory=list)
 
     def is_complete(self) -> bool:
-        return self.steps[-1].terminal
+        return self.steps[-1].terminal if self.steps else False
 
     def get_total_reward(self, t: int | None = None) -> float:
         if t is None:
             return sum(step.reward for step in self.steps)
-        elif 1 <= t <= len(self.steps):
+
+        if 0 <= t <= len(self.steps):
             return sum(step.reward for step in self.steps[:t])
-        else:
-            raise IndexError(f"Invalid step index: {t}. Must be in range [1, {len(self.steps)}].")
+
+        raise IndexError(f"Invalid step index: {t}. Must be in range [1, {len(self.steps)}].")
 
     def add_step(self, step: Step) -> None:
         if not isinstance(step, Step):
