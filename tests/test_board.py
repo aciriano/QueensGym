@@ -1,3 +1,5 @@
+from collections import Counter
+
 import numpy as np
 import pytest
 
@@ -63,19 +65,19 @@ class TestBoard:
 
     def test_square_to_numpy(self):
         square = Square(file=1, rank=2)
-        Board(n=3).square_to_numpy(square) == 1, 0
+        assert Board(n=3).square_to_numpy(square) == (1, 0)
 
     def test_numpy_to_square(self):
         square = Square(file=1, rank=2)
-        Board(n=3).numpy_to_square((1, 0)) == square
+        assert Board(n=3).numpy_to_square((1, 0)) == square
 
     def test_square_to_seq(self):
         square = Square(file=1, rank=2)
-        Board(n=3).square_to_seq(square) == 4
+        assert Board(n=3).square_to_seq(square) == 4
 
     def test_seq_to_square(self):
         square = Square(file=1, rank=2)
-        Board(n=3).seq_to_square(4) == square
+        assert Board(n=3).seq_to_square(4) == square
 
     def test_get(self) -> None:
         board = Board(n=5)
@@ -156,25 +158,44 @@ class TestBoard:
         exp_mat = np.array([[1, 0, 1, 1], [1, 0, 2, 0], [2, 2, 0, 1], [0, 1, 2, 1]])
         assert np.array_equal(board.as_heat_map(), exp_mat)
 
-    def test_get_empty_square(self) -> None:
-        board = Board(n=2)
-        board.put(Square(1, 1), Queen)
-        board.put(Square(1, 2), Queen)
-        board.put(Square(2, 1), Queen)
-        assert board.get_empty_square() == Square(2, 2)
-
-        board.put(Square(2, 2), Queen)
-        assert board.get_empty_square() is None
-
-    def test_get_safe_square(self) -> None:
+    def test_get_attacked(self) -> None:
+        # Set up a simple board.
         board = Board(n=4)
-        board.put(Square(1, 1), Rook)
-        board.put(Square(2, 2), Rook)
-        board.put(Square(3, 3), Rook)
-        assert board.get_safe_square() == Square(4, 4)
+        board.put(Square(1, 1), Queen)
+        board.put(Square(3, 2), Rook)
 
-        board.put(Square(4, 4), Rook)
-        assert board.get_safe_square() is None
+        # Check the attacked squares.
+        attacked_squares = board.get_attacked()
+        expected = [
+            Square(*i)
+            for i in [
+                (1, 2),
+                (1, 3),
+                (1, 4),
+                (2, 1),
+                (3, 1),
+                (4, 1),
+                (2, 2),
+                (3, 3),
+                (4, 4),
+                (3, 1),
+                (3, 3),
+                (3, 4),
+                (1, 2),
+                (2, 2),
+                (4, 2),
+            ]
+        ]
+
+        assert Counter(attacked_squares) == Counter(expected)
+
+    def test_non_attacked(self) -> None:
+        board = Board(n=4)
+        board.put(Square(1, 1), Queen)
+        board.put(Square(3, 2), Rook)
+
+        expected = {Square(1, 1), Square(3, 2), Square(2, 3), Square(2, 4), Square(4, 3)}
+        assert board.get_non_attacked() == expected
 
 
 class TestSafeBoard:

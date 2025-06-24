@@ -190,47 +190,54 @@ class Board:
                 that are attacking the correspondant square in the board.
         """
         heat_map = np.zeros((self.n, self.n), dtype=np.uint16)
-        for i in {(x, y) for x in range(1, self.n + 1) for y in range(1, self.n + 1)}:
-            dst_square = Square(*i)
-            a, b = self.square_to_numpy(square=Square(*i))
-            for square, piece in self.state.items():
-                if piece.attack(square, dst_square):
-                    heat_map[a][b] += 1
+        for square in self.get_attacked():
+            a, b = self.square_to_numpy(square)
+            heat_map[a][b] += 1
         return heat_map
 
-    def get_empty_square(self) -> Square | None:
+    def get_attacked(self) -> list[Square]:
         """
-        Get a random empty square on the board.
+        Get all squares that are attacked by any piece on the board.
+
+        The number of apparecences of a square in the list
+        indicates how many pieces are attacking that square.
 
         Returns:
-            Square | None: A random empty square if available, otherwise None.
+            list[Square]: A list of squares that are attacked by pieces on the board.
         """
-        if self.total_placed() == self.n * self.n:
-            return None
-        else:
-            matrix = self.as_matrix()
-            x, y = np.where(matrix == 0)
-            chosen_idx = np.random.randint(0, len(x))
-            chosen = int(x[chosen_idx]), int(y[chosen_idx])
-            return self.numpy_to_square(np_square=chosen)
+        attacked = list()
+        for square, piece in self.state.items():
+            attacked.extend(piece.attacked(_from=square, limit=self.n))
+        return attacked
 
-    def get_safe_square(self) -> Square | None:
+    def get_non_attacked(self) -> set[Square]:
         """
-        Get a random empty square that is not under attack by any piece on the board.
+        Get all squares that are not attacked by any piece on the board.
 
         Returns:
-            Square | None: A random empty square that is not under attack,
-                or None if no such square exists.
+            set[Square]: A set of squares that are not attacked by any piece on the board.
         """
-        heat_map = self.as_heat_map()
-        matrix = self.as_matrix()
-        x, y = np.where((heat_map == 0) & (matrix == 0))
-        if len(x):
-            chosen_idx = np.random.randint(0, len(x))
-            chosen = int(x[chosen_idx]), int(y[chosen_idx])
-            return self.numpy_to_square(np_square=chosen)
-        else:
-            return None
+        attacked = self.get_attacked()
+        return {
+            Square(file=i, rank=j)
+            for i in range(1, self.n + 1)
+            for j in range(1, self.n + 1)
+            if Square(file=i, rank=j) not in attacked
+        }
+
+    def get_empty(self) -> set[Square]:
+        """
+        Get all empty squares on the board.
+
+        Returns:
+            set[Square]: A set of empty squares on the board.
+        """
+        return {
+            Square(file=i, rank=j)
+            for i in range(1, self.n + 1)
+            for j in range(1, self.n + 1)
+            if Square(file=i, rank=j) not in self.state
+        }
 
 
 class SafeBoard(Board):

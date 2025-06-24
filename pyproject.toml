@@ -17,6 +17,7 @@ classifiers = [
 dependencies = [
     "numpy==2.2.6",
     "pygame==2.6.1",
+    "gymnasium==1.1.1"
 ]
 dynamic = ["version"]
 
@@ -56,7 +57,7 @@ markers = [
     "slow: tests that require more time to be executed."
 ]
 testpaths = "tests"
-addopts = "--cov=queensgym --cov-report=html --disable-warnings -vv"
+addopts = "-m 'not slow' --cov=queensgym --cov-report=html --disable-warnings -vv"
 
 [tool.ruff]
 line-length = 100

@@ -120,3 +120,42 @@ class TestSquare:
     def test_distance_type_error(self) -> None:
         with pytest.raises(NotImplementedError):
             Square(1, 1).distance("Not a Square.")
+
+    @pytest.mark.parametrize(
+        argnames="offset, expected",
+        argvalues=[
+            ((1, 1), [Square(*i) for i in [(5, 6)]]),
+            ((-1, -1), [Square(*i) for i in [(3, 4), (2, 3), (1, 2)]]),
+            ((1, -1), [Square(*i) for i in [(5, 4), (6, 3)]]),
+            ((-1, 1), [Square(*i) for i in [(3, 6)]]),
+            ((1, 0), [Square(*i) for i in [(5, 5), (6, 5)]]),
+            ((0, 1), [Square(*i) for i in [(4, 6)]]),
+        ],
+    )
+    def test_related(self, offset: tuple[int, int], expected: list[Square]) -> None:
+        sq = Square(4, 5)
+        assert sq.get_related(limit=6, offset=offset) == expected
+
+    def test_related_errors(self) -> None:
+        sq = Square(4, 5)
+
+        with pytest.raises(ValueError):
+            sq.get_related(limit=8.0, offset=(1, 1))
+
+        with pytest.raises(ValueError):
+            sq.get_related(limit=0, offset=(1, 1))
+
+        with pytest.raises(ValueError):
+            sq.get_related(limit=3, offset=(1, 1))
+
+        with pytest.raises(TypeError):
+            sq.get_related(limit=8, offset=[1, 1])
+
+        with pytest.raises(TypeError):
+            sq.get_related(limit=8, offset=(1, 1, 1))
+
+        with pytest.raises(TypeError):
+            sq.get_related(limit=8, offset=(1, 1.0))
+
+        with pytest.raises(ValueError):
+            sq.get_related(limit=8, offset=(0, 0))
