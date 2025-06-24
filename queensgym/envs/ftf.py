@@ -2,6 +2,7 @@
 from functools import cached_property
 from typing import Any
 from typing import ClassVar
+from typing import Type
 
 import gymnasium as gym
 import numpy as np
@@ -14,6 +15,9 @@ from queensgym.exceptions import UnsafePlacementError
 from queensgym.factory import SafeBoardFactory
 from queensgym.piece import Queen
 from queensgym.square import Square
+
+FtfAction = int | np.uint16
+FtfObservation = list[int] | np.typing.NDArray[np.uint8]
 
 
 class FTF(gym.Env):
@@ -38,11 +42,13 @@ class FTF(gym.Env):
         "render_fps": 10,
     }
 
+    action_type: ClassVar[Type] = np.uint16
+
     # Observation mode. Can be "array" or "matrix".
     obs_mode: str
 
-    # Render mode. Can be "human", "rgb", or "console".
-    render_mode: str
+    # Render mode. Can be "human", "rgb", "console" or None.
+    render_mode: str | None
 
     # Number of queens to place on the board.
     n: int
@@ -66,7 +72,7 @@ class FTF(gym.Env):
         try:
             # Check if the provided observation and render modes are valid.
             assert obs_mode in self.metadata["obs_modes"]
-            assert render_mode in self.metadata["render_modes"]
+            assert (render_mode is None) or render_mode in self.metadata["render_modes"]
 
             # Initialize the environment with the given parameters.
             self.obs_mode = obs_mode
@@ -89,14 +95,14 @@ class FTF(gym.Env):
             ) from e
 
     @cached_property
-    def action_space(self) -> gym.spaces.Box:
-        return gym.spaces.Box(low=1, high=self.n, shape=(1,), dtype=np.uint16)
+    def action_space(self) -> gym.spaces.Discrete:
+        return gym.spaces.Discrete(n=self.n, start=1)
 
     @cached_property
-    def observation_space(self) -> gym.spaces.Box:
+    def observation_space(self) -> gym.spaces.Discrete | gym.spaces.Box:
         if self.obs_mode == "array":
             # Observation space is a 1D array of size n, representing the rank of each queen.
-            return gym.spaces.Box(low=0, high=self.n, shape=(self.n,), dtype=np.uint16)
+            return gym.spaces.Discrete(n=self.n, start=1)
         elif self.obs_mode == "matrix":
             # Observation space is a 2D matrix of size (n, n), where each row represents a queen
             # and the columns represent the ranks of the queens.
@@ -104,30 +110,30 @@ class FTF(gym.Env):
         else:
             raise EnvironmentException(f"Invalid observation mode: {self.obs_mode}.")
 
-    def _get_observation(self) -> np.ndarray:
+    def _get_observation(self) -> FtfObservation:
         """
         Get the current observation of the board based on the observation mode.
 
         Returns:
-            np.ndarray: The current observation of the board.
+            FtfObservation: The current observation of the board.
 
         Raises:
             EnvironmentException: If the observation mode is invalid.
         """
         if self.obs_mode == "array":
-            obs = np.zeros(self.n, dtype=np.uint16)
+            obs = [0 for _ in range(self.n)]
             for i, square in enumerate(sorted(self.board.squares, key=lambda x: x.file)):
-                obs[i] = np.uint16(square.rank)
+                obs[i] = square.rank
             return obs
         else:
             return self.board.as_matrix()
 
-    def step(self, action: np.uint16) -> tuple[np.ndarray, float, bool, bool, Episode]:
+    def step(self, action: FtfAction) -> tuple[FtfObservation, float, bool, bool, Episode]:
         """
         Perform a step in the environment by placing a queen at the specified rank.
 
         Args:
-            action (np.uint16): The rank where the queen should be placed.
+            action (Action): The rank where the queen should be placed.
 
         Returns:
             tuple: A tuple containing:
@@ -140,6 +146,12 @@ class FTF(gym.Env):
         Raises:
             EnvironmentException: If the environment is terminated or if the action is invalid.
         """
+        if not isinstance(action, self.action_type):
+            try:
+                action = self.action_type(action)
+            except Exception as e:
+                raise EnvironmentException(f"Action {action} is invalid.") from e
+
         if self.terminated:
             raise EnvironmentException("Cannot step in a terminated environment. Please reset it.")
 
@@ -147,25 +159,37 @@ class FTF(gym.Env):
             raise EnvironmentException(f"Invalid action: {action}. Must be in {self.action_space}.")
 
         try:
+            # Put a queen in the rank chosen by the external agent.
             square = Square(file=self.board.total_placed() + 1, rank=int(action))
             self.board.put(square, Queen)
             reward = 1.0
         except UnsafePlacementError:
+            # If the placement is not safe, the episode is finished and the reward is 0.
             reward = 0.0
             terminated = True
         else:
+            # If the placement is valid, check if the board has n queens placed in it.
+            # In this case, the episode is terminated.
             terminated = self.board.total_placed() == self.n
         finally:
+            # If the agent has failed, truncated is True.
             truncated = terminated and reward == 0.0
-            obs = self._get_observation()
+
+            # Save the current status of the episode.
             self.terminated = terminated
+
+            # Take a new observation.
+            obs = self._get_observation()
+
+            # Add a new step to the current episode.
             step = Step(action=action, reward=reward, next_state=obs, terminal=terminated)
             self.current_episode.add_step(step)
+
             return obs, reward, terminated, truncated, self.current_episode
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[Any, Episode]:
+    ) -> tuple[FtfObservation, Episode]:
         """
         Reset the environment to its initial state.
 

@@ -189,6 +189,14 @@ class TestBoard:
 
         assert Counter(attacked_squares) == Counter(expected)
 
+    def test_non_attacked(self) -> None:
+        board = Board(n=4)
+        board.put(Square(1, 1), Queen)
+        board.put(Square(3, 2), Rook)
+
+        expected = {Square(1, 1), Square(3, 2), Square(2, 3), Square(2, 4), Square(4, 3)}
+        assert board.get_non_attacked() == expected
+
 
 class TestSafeBoard:
     """

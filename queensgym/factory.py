@@ -145,9 +145,7 @@ class RandomBoardFactory(_BoardFactory):
         Returns:
             Board: The configured board with pieces placed.
         """
-        n_preplaced = self._choose_preplaced()
         candidates = board.get_empty()
-
         # Raise an error if there are not enough empty squares to place
         # at least the minimum number of preplaced pieces.
         if len(candidates) < self.preplaced[0]:
@@ -156,6 +154,7 @@ class RandomBoardFactory(_BoardFactory):
                 f"pieces. Only {len(candidates)} empty squares available."
             )
 
+        n_preplaced = self._choose_preplaced()
         # If the number of candidates is lower then the chosen preplaced,
         # update the number of preplaced pieces to the number of available squares.
         if len(candidates) < n_preplaced:

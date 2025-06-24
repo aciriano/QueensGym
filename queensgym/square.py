@@ -98,11 +98,17 @@ class Square:
         if (not isinstance(limit, int)) or limit <= 0:
             raise ValueError(f"Limit must be a positive integer. '{limit}' is invalid.")
 
+        if max(self.file, self.rank) > limit:
+            raise ValueError(f"Limit must be lower than maximum of ({self.file}, {self.rank})")
+
         if not isinstance(offset, tuple) or len(offset) != 2:
             raise TypeError(f"Offset must be a tuple of two integers. '{offset}' is invalid.")
 
         if not all(isinstance(i, int) for i in offset):
             raise TypeError(f"Offset must be a tuple of two integers. '{offset}' is invalid.")
+
+        if offset == (0, 0):
+            raise ValueError(f"Offset cannot be the null vector ({offset}).")
 
         out = []
         dx, dy = offset
